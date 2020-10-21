@@ -380,8 +380,24 @@ class TEST_OT_test_op(Operator):
             
     @staticmethod
     def clear_scene(context):
-        for obj in bpy.data.objects:
-            bpy.data.objects.remove(obj)
+        
+        # remove mesh Cube
+        if "Cube" in bpy.data.meshes:
+            mesh = bpy.data.meshes["Cube"]
+            print("removing mesh", mesh)
+            bpy.data.meshes.remove(mesh)
+        
+        bpy.ops.object.select_by_type(type='MESH')
+        bpy.ops.object.delete()
+        
+        scene = bpy.context.scene
+        scene.animation_data_clear()
+        for o in scene.objects:
+            o.animation_data_clear()
+        #bpy.ops.object.select_by_type(type='CAMERA')
+        #bpy.context.active_object.animation_data_clear()
+        #for obj in bpy.data.objects:
+        #    bpy.data.objects.remove(obj)
  
     @staticmethod
     def add_cube(context):
@@ -415,10 +431,13 @@ class TEST_OT_test_op(Operator):
         
         #bpy.context.scene.update()
         
+        
+        #.select.select_by_type(type=’MESH’)
         for i, obj in enumerate(bpy.data.objects):
-            mat = bpy.data.materials.new("mat_" + str(obj.name))
-            mat.diffuse_color = (1.0-i/len(bpy.data.objects), 0, i/len(bpy.data.objects), 1)
-            obj.data.materials.append(mat)
+            if obj.type == 'MESH':
+                mat = bpy.data.materials.new("mat_" + str(obj.name))
+                mat.diffuse_color = (1.0-i/len(bpy.data.objects), 0, i/len(bpy.data.objects), 1)
+                obj.data.materials.append(mat)
             
             
  
@@ -453,8 +472,12 @@ class TEST_OT_test_op(Operator):
     
     @staticmethod  
     def adjust_location(context, polymer):
+        
+        idx=0
         for i, obj in enumerate(bpy.data.objects):
-            obj.location=polymer[i]
+            if obj.type == 'MESH':
+                obj.location=polymer[idx]
+                idx += 1
      
 # ------------------------------------------------------------------------
 #    Registration
