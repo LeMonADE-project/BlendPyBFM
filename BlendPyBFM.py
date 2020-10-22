@@ -51,11 +51,15 @@ class PyBFMLoader():
     # default constructor 
     def __init__(self, fname): 
         self.filename = fname
+        self.boxX = 128
+        self.boxY = 128
+        self.boxZ = 128
         self.set_of_bondvectors = {} # holds dictionary of all bond vectors ASCII->[x,y,z]
         self.line2MCS = [] # mapping the frame with linenumber to MCStime
         self.polymer_last_config = np.empty((0, 3),dtype=int) # last configuration of polymeric system
         self.polymer_bonds={} # holds dictionary of all bonds due to !bonds and !mcs
     
+        self.read_box() # read !box_x, !box_y, box_z
         self.load_bondvector() # read !set_of_bondvectors
         self.read_bonds() # read !bonds
         self.scan_file()
@@ -101,6 +105,44 @@ class PyBFMLoader():
         self.set_of_bondvectors = vector
        
         return vector
+    
+    def read_box(self):
+        print("read in of !box command")
+        
+        fobj = open(self.filename)
+        
+        while True:
+            # read line
+            line = fobj.readline()
+            
+            # check if line is not empty-> EOF
+            if not line:
+                break
+            
+            if line.startswith('!box_x'):
+                aline=line.split("=")
+                self.boxX = int(aline[1])
+                
+            if line.startswith('!box_y'):
+                aline=line.split("=")
+                self.boxY = int(aline[1])
+                
+            if line.startswith('!box_z'):
+                aline=line.split("=")
+                self.boxZ = int(aline[1])        
+                    
+                    
+            # found first frame    
+            if line.startswith('!mcs'):
+                print("found mcs")
+                print(line)
+                break
+            
+            
+                
+        fobj.close()
+        
+        return True
     
     def read_bonds(self):
         print("read in of !bonds command")
@@ -300,7 +342,7 @@ class PT_BlendPyBFM(bpy.types.Panel):
         
         row.operator('test.test_op', text='Clear scene').action = 'CLEAR'
         row = layout.row()
-        row.operator('test.test_op', text='Add cube').action = 'ADD_CUBE'
+        row.operator('test.test_op', text='Add simulation cube').action = 'ADD_CUBE'
         row = layout.row()
         row.operator('test.test_op', text='Add sphere first frame').action = 'ADD_SPHERE'
         row = layout.row()
@@ -315,20 +357,93 @@ class TEST_OT_test_op(Operator):
     action: EnumProperty(
         items=[
             ('CLEAR', 'clear scene', 'clear scene'),
-            ('ADD_CUBE', 'add cube', 'add cube'),
+            ('ADD_CUBE', 'add simulation cube', 'add simulation cube'),
             ('ADD_SPHERE', 'add sphere first frame', 'add sphere first frame'),
             ('ADD_SPHERE_MOVIE', 'add sphere movie', 'add sphere movie'),
             ('SELECT_FILE', 'select file dialog', 'select file dialog')
         ]
     )
     
+    def cylinder_between(self, x1, y1, z1, x2, y2, z2, r):
+        dx = x2 - x1
+        dy = y2 - y1
+        dz = z2 - z1    
+        dist = math.sqrt(dx**2 + dy**2 + dz**2)
+
+        bpy.ops.mesh.primitive_cylinder_add(
+              radius = r, 
+              depth = dist,
+              location = (dx/2 + x1, dy/2 + y1, dz/2 + z1)   
+          ) 
+
+        phi = math.atan2(dy, dx) 
+        theta = math.acos(dz/dist) 
+
+        bpy.context.object.rotation_euler[1] = theta 
+        bpy.context.object.rotation_euler[2] = phi 
+            
     def execute(self, context):
         if self.action == 'SELECT_FILE':
             self.selectFileDialog(context=context)
         elif self.action == 'CLEAR':
             self.clear_scene(context=context)
         elif self.action == 'ADD_CUBE':
-            self.add_cube(context=context)
+            self.filename = context.scene.my_tool.path
+            self.loader=PyBFMLoader(self.filename)
+            bpy.ops.object.select_all(action='DESELECT')
+        
+            self.cylinder_between(0,0,0, self.loader.boxX,0,0,1)
+            self.cylinder_between(0,0,0, 0,self.loader.boxY,0,1)
+            self.cylinder_between(0,0,0, 0,0,self.loader.boxZ,1)
+            
+            self.cylinder_between(self.loader.boxX,0,0, self.loader.boxX,self.loader.boxY,0,1)
+            self.cylinder_between(self.loader.boxX,0,0, self.loader.boxX,0,self.loader.boxZ,1)
+            
+            self.cylinder_between(0,0,self.loader.boxZ, self.loader.boxX,0,self.loader.boxZ,1)
+            self.cylinder_between(0,0,self.loader.boxZ, 0,self.loader.boxY,self.loader.boxZ,1)
+            
+            self.cylinder_between(0,self.loader.boxY,0, self.loader.boxX,self.loader.boxY,0,1)
+            self.cylinder_between(0,self.loader.boxY,0, 0,self.loader.boxY,self.loader.boxZ,1)
+            
+            self.cylinder_between(self.loader.boxX,0,self.loader.boxZ, self.loader.boxX,self.loader.boxY,self.loader.boxZ,1)
+            self.cylinder_between(self.loader.boxX,self.loader.boxY,0, self.loader.boxX,self.loader.boxY,self.loader.boxZ,1)
+            self.cylinder_between(0,self.loader.boxY,self.loader.boxZ, self.loader.boxX,self.loader.boxY,self.loader.boxZ,1)
+            
+#            coll = bpy.data.collections.new("SimulationBox")
+#            bpy.context.scene.collection.children.link(coll)
+#        
+#            bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius = 0.4, depth = 2.7,location = (0, 0, 0)) 
+#        cylinder = bpy.context.object
+#        #coll.objects.link(cylinder)
+#        bpy.context.collection.objects.unlink(cylinder)
+#        
+#        for key in sorted(bonds.keys()):
+#            for item in sorted(bonds[key]):
+#                if key < item:
+#                    dx = polymer[key][0] - polymer[item][0]
+#                    dy = polymer[key][1] - polymer[item][1]
+#                    dz = polymer[key][2] - polymer[item][2]  
+#                    dist = math.sqrt(dx**2 + dy**2 + dz**2)
+#                    
+#                    #bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius = 0.4, depth = dist,location = (dx/2 + polymer[item][0], dy/2 + polymer[item][1], dz/2 + polymer[item][2])) 
+#                    ob = cylinder.copy()
+#                    ob.data = cylinder.data.copy()
+#                    ob.location = Vector((dx/2 + polymer[item][0], dy/2 + polymer[item][1], dz/2 + polymer[item][2]));
+#                    #bpy.context.collection.objects.link(ob)
+#                    #coll.objects.link(ob)
+#                    
+#                    phi = math.atan2(dy, dx) 
+#                    theta = math.acos(dz/dist)
+#                    #cylinder = bpy.context.object
+#                    ob.rotation_euler[1] = theta 
+#                    ob.rotation_euler[2] = phi
+#                    #print(cylinder.rotation_euler[1])
+#                    #print(cylinder.rotation_euler[2])
+#                    coll.objects.link(ob)
+#                    #bpy.context.collection.objects.unlink(cylinder)
+#        
+#            
+#            self.add_cube(context=context)
         elif self.action == 'ADD_SPHERE':
             # self.add_cube(context=context)
             self.filename = context.scene.my_tool.path
@@ -486,6 +601,11 @@ class TEST_OT_test_op(Operator):
         coll = bpy.data.collections.new("Bonds")
         bpy.context.scene.collection.children.link(coll)
         
+        bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius = 0.4, depth = 2.7,location = (0, 0, 0)) 
+        cylinder = bpy.context.object
+        #coll.objects.link(cylinder)
+        bpy.context.collection.objects.unlink(cylinder)
+        
         for key in sorted(bonds.keys()):
             for item in sorted(bonds[key]):
                 if key < item:
@@ -494,16 +614,22 @@ class TEST_OT_test_op(Operator):
                     dz = polymer[key][2] - polymer[item][2]  
                     dist = math.sqrt(dx**2 + dy**2 + dz**2)
                     
-                    bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius = 0.4, depth = dist,location = (dx/2 + polymer[item][0], dy/2 + polymer[item][1], dz/2 + polymer[item][2])) 
+                    #bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius = 0.4, depth = dist,location = (dx/2 + polymer[item][0], dy/2 + polymer[item][1], dz/2 + polymer[item][2])) 
+                    ob = cylinder.copy()
+                    ob.data = cylinder.data.copy()
+                    ob.location = Vector((dx/2 + polymer[item][0], dy/2 + polymer[item][1], dz/2 + polymer[item][2]));
+                    #bpy.context.collection.objects.link(ob)
+                    #coll.objects.link(ob)
+                    
                     phi = math.atan2(dy, dx) 
                     theta = math.acos(dz/dist)
-                    cylinder = bpy.context.object
-                    cylinder.rotation_euler[1] = theta 
-                    cylinder.rotation_euler[2] = phi
-                    print(cylinder.rotation_euler[1])
-                    print(cylinder.rotation_euler[2])
-                    coll.objects.link(cylinder)
-                    bpy.context.collection.objects.unlink(cylinder)
+                    #cylinder = bpy.context.object
+                    ob.rotation_euler[1] = theta 
+                    ob.rotation_euler[2] = phi
+                    #print(cylinder.rotation_euler[1])
+                    #print(cylinder.rotation_euler[2])
+                    coll.objects.link(ob)
+                    #bpy.context.collection.objects.unlink(cylinder)
         
         #breakpoint()
         
