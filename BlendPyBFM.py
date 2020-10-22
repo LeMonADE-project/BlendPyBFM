@@ -398,6 +398,20 @@ class TEST_OT_test_op(Operator):
         #bpy.context.active_object.animation_data_clear()
         #for obj in bpy.data.objects:
         #    bpy.data.objects.remove(obj)
+        
+        # delete collection
+        name = "PolymerSystem"
+        remove_collection_objects = True
+
+        coll = bpy.data.collections.get(name)
+
+        if coll:
+            if remove_collection_objects:
+                obs = [o for o in coll.objects]
+                while obs:
+                    bpy.data.objects.remove(obs.pop())
+
+            bpy.data.collections.remove(coll)
  
     @staticmethod
     def add_cube(context):
@@ -420,6 +434,17 @@ class TEST_OT_test_op(Operator):
         sphere = bpy.context.object
         sphere.location = Vector((vec[0],vec[1],vec[2]));
         
+        coll = bpy.data.collections.new("PolymerSystem")
+        # link the newCol to the scene
+        bpy.context.scene.collection.children.link(coll)
+        #bpy.context.collection.objects.link(sphere)
+        coll.objects.link(sphere)
+        bpy.context.collection.objects.unlink(sphere)
+
+        # link the object to collection
+        #newCol.objects.link(obj)
+        # ... or link through bpy.data
+        #bpy.data.collections['Yammy'].objects.link(obj)
 
         #for i in range(1000):
         
@@ -427,7 +452,9 @@ class TEST_OT_test_op(Operator):
             ob = sphere.copy()
             ob.data = sphere.data.copy()
             ob.location = Vector((vec[0],vec[1],vec[2]));
-            bpy.context.collection.objects.link(ob)
+            #bpy.context.collection.objects.link(ob)
+            coll.objects.link(ob)
+            #bpy.context.scene.collection.objects.unlink(ob)
         
         #bpy.context.scene.update()
         
@@ -473,11 +500,26 @@ class TEST_OT_test_op(Operator):
     @staticmethod  
     def adjust_location(context, polymer):
         
-        idx=0
-        for i, obj in enumerate(bpy.data.objects):
-            if obj.type == 'MESH':
-                obj.location=polymer[idx]
-                idx += 1
+        # delete collection
+        name = "PolymerSystem"
+        #remove_collection_objects = True
+
+        coll = bpy.data.collections.get(name)
+
+        if coll:
+            for i, obj in enumerate(coll.objects):
+            #obs = [o for o in coll.objects]
+            #while obs:
+                obj.location=polymer[i]
+                #bpy.data.objects.remove(obs.pop())
+
+           
+        
+        #idx=0
+        #for i, obj in enumerate(bpy.data.objects):
+        #   if obj.type == 'MESH':
+        #       obj.location=polymer[idx]
+        #        idx += 1
      
 # ------------------------------------------------------------------------
 #    Registration
