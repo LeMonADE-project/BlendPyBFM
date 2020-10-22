@@ -43,6 +43,7 @@ from bpy.types import (Panel,
 import numpy as np
 import os
 from mathutils import Vector;
+import math
 
 
 class PyBFMLoader():
@@ -335,6 +336,7 @@ class TEST_OT_test_op(Operator):
             polymer = self.loader.polymer_last_config
             print("File loaded")
             self.add_sphere(context=context, polymer=polymer)
+            self.add_bonds(context=context, bonds=self.loader.polymer_bonds, polymer=polymer)
         elif self.action == 'ADD_SPHERE_MOVIE':
             # self.add_cube(context=context)
             self.filename = context.scene.my_tool.path
@@ -342,7 +344,8 @@ class TEST_OT_test_op(Operator):
             polymer = self.loader.polymer_last_config
             
             # create initial config
-            self.add_sphere(context=context, polymer=polymer)
+            self.add_sphere(context=context, polymer=self.loader.polymer_last_config)
+            self.add_bonds(context=context, bonds=self.loader.polymer_bonds, polymer=self.loader.polymer_last_config)
             
             # useful shortcut
             scene = bpy.context.scene
@@ -356,10 +359,11 @@ class TEST_OT_test_op(Operator):
                     
                     polymer = self.loader.read_configuration(i)
                     print("read next frame")
-                    self.adjust_location(context=context, polymer=polymer)
+                    self.adjust_location(context=context, bonds=self.loader.polymer_bonds, polymer=self.loader.polymer_last_config)
                     
                     for i, obj in enumerate(bpy.data.objects):
                         obj.keyframe_insert(data_path="location", index=-1)
+                        obj.keyframe_insert(data_path="rotation_euler", index=-1)
                         
                         # comment this if you want interpolation between frames
                         for fcurve in obj.animation_data.action.fcurves:
@@ -412,6 +416,15 @@ class TEST_OT_test_op(Operator):
                     bpy.data.objects.remove(obs.pop())
 
             bpy.data.collections.remove(coll)
+            
+        coll = bpy.data.collections.get("Bonds")
+        if coll:
+            if remove_collection_objects:
+                obs = [o for o in coll.objects]
+                while obs:
+                    bpy.data.objects.remove(obs.pop())
+
+            bpy.data.collections.remove(coll)
  
     @staticmethod
     def add_cube(context):
@@ -433,7 +446,7 @@ class TEST_OT_test_op(Operator):
         vec = polymer[0]
         sphere = bpy.context.object
         sphere.location = Vector((vec[0],vec[1],vec[2]));
-        
+        bpy.ops.object.shade_smooth()
         coll = bpy.data.collections.new("PolymerSystem")
         # link the newCol to the scene
         bpy.context.scene.collection.children.link(coll)
@@ -466,7 +479,66 @@ class TEST_OT_test_op(Operator):
                 mat.diffuse_color = (1.0-i/len(bpy.data.objects), 0, i/len(bpy.data.objects), 1)
                 obj.data.materials.append(mat)
             
-            
+    @staticmethod
+    def add_bonds(context, bonds, polymer):
+        bpy.ops.object.select_all(action='DESELECT')
+        
+        coll = bpy.data.collections.new("Bonds")
+        bpy.context.scene.collection.children.link(coll)
+        
+        for key in sorted(bonds.keys()):
+            for item in sorted(bonds[key]):
+                if key < item:
+                    dx = polymer[key][0] - polymer[item][0]
+                    dy = polymer[key][1] - polymer[item][1]
+                    dz = polymer[key][2] - polymer[item][2]  
+                    dist = math.sqrt(dx**2 + dy**2 + dz**2)
+                    
+                    bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius = 0.4, depth = dist,location = (dx/2 + polymer[item][0], dy/2 + polymer[item][1], dz/2 + polymer[item][2])) 
+                    phi = math.atan2(dy, dx) 
+                    theta = math.acos(dz/dist)
+                    cylinder = bpy.context.object
+                    cylinder.rotation_euler[1] = theta 
+                    cylinder.rotation_euler[2] = phi
+                    print(cylinder.rotation_euler[1])
+                    print(cylinder.rotation_euler[2])
+                    coll.objects.link(cylinder)
+                    bpy.context.collection.objects.unlink(cylinder)
+        
+        #breakpoint()
+        
+#        print("%s: %s" % (key, item))
+#        # default segments=32, ring_count=16
+#        bpy.ops.mesh.primitive_uv_sphere_add(segments=9, ring_count=6)
+#        vec = polymer[0]
+#        sphere = bpy.context.object
+#        sphere.location = Vector((vec[0],vec[1],vec[2]));
+#        
+#        coll = bpy.data.collections.new("Bonds")
+#        # link the newCol to the scene
+#        bpy.context.scene.collection.children.link(coll)
+#        #bpy.context.collection.objects.link(sphere)
+#        coll.objects.link(sphere)
+#        bpy.context.collection.objects.unlink(sphere)
+
+#        # link the object to collection
+#        #newCol.objects.link(obj)
+#        # ... or link through bpy.data
+#        #bpy.data.collections['Yammy'].objects.link(obj)
+
+#        #for i in range(1000):
+#        
+#        for vec in polymer[1:]:
+#            ob = sphere.copy()
+#            ob.data = sphere.data.copy()
+#            ob.location = Vector((vec[0],vec[1],vec[2]));
+#            #bpy.context.collection.objects.link(ob)
+#            coll.objects.link(ob)
+#            #bpy.context.scene.collection.objects.unlink(ob)
+#        
+#        #bpy.context.scene.update()
+#        
+        
  
     @staticmethod
     def add_sphere_movie(context, polymer, frame):
@@ -498,12 +570,11 @@ class TEST_OT_test_op(Operator):
         
     
     @staticmethod  
-    def adjust_location(context, polymer):
+    def adjust_location(context, bonds, polymer):
         
-        # delete collection
+        bpy.ops.object.select_all(action='DESELECT')
         name = "PolymerSystem"
-        #remove_collection_objects = True
-
+        
         coll = bpy.data.collections.get(name)
 
         if coll:
@@ -513,8 +584,34 @@ class TEST_OT_test_op(Operator):
                 obj.location=polymer[i]
                 #bpy.data.objects.remove(obs.pop())
 
-           
+        bpy.ops.object.select_all(action='DESELECT')
         
+        coll = bpy.data.collections.get("Bonds")
+        
+        if coll:
+            idx=0     
+            for key in sorted(bonds.keys()):
+                for item in sorted(bonds[key]):
+                    if key < item:
+                        dx = polymer[key][0] - polymer[item][0]
+                        dy = polymer[key][1] - polymer[item][1]
+                        dz = polymer[key][2] - polymer[item][2]  
+                        dist = math.sqrt(dx**2 + dy**2 + dz**2)
+                        
+                        #bpy.ops.mesh.primitive_cylinder_add(radius = 0.4, depth = dist,location = (dx/2 + polymer[item][0], dy/2 + polymer[item][1], dz/2 + polymer[item][2])) 
+                        phi = math.atan2(dy, dx) 
+                        theta = math.acos(dz/dist)
+                        cylinder = coll.objects[idx]
+                        print(cylinder.rotation_euler[1])
+                        print(cylinder.rotation_euler[2])
+                        cylinder.location = (dx/2 + polymer[item][0], dy/2 + polymer[item][1], dz/2 + polymer[item][2])
+                        #cylinder.depth = dist
+                        cylinder.rotation_euler[1] = theta 
+                        cylinder.rotation_euler[2] = phi
+                        idx += 1
+                        #coll.objects.link(cylinder)
+                        #bpy.context.collection.objects.unlink(cylinder)   
+            
         #idx=0
         #for i, obj in enumerate(bpy.data.objects):
         #   if obj.type == 'MESH':
