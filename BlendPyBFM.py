@@ -365,6 +365,7 @@ class TEST_OT_test_op(Operator):
     )
     
     def cylinder_between(self, x1, y1, z1, x2, y2, z2, r):
+        # Thanks to https://blender.stackexchange.com/questions/5898/how-can-i-create-a-cylinder-linking-two-points-with-python
         dx = x2 - x1
         dy = y2 - y1
         dz = z2 - z1    
@@ -381,6 +382,7 @@ class TEST_OT_test_op(Operator):
 
         bpy.context.object.rotation_euler[1] = theta 
         bpy.context.object.rotation_euler[2] = phi 
+        
             
     def execute(self, context):
         if self.action == 'SELECT_FILE':
@@ -392,23 +394,50 @@ class TEST_OT_test_op(Operator):
             self.loader=PyBFMLoader(self.filename)
             bpy.ops.object.select_all(action='DESELECT')
         
+            coll = bpy.data.collections.new("SimulationBox")
+            bpy.context.scene.collection.children.link(coll)
+        
+            
             self.cylinder_between(0,0,0, self.loader.boxX,0,0,1)
+            cylinder = bpy.context.object; coll.objects.link(cylinder); bpy.context.collection.objects.unlink(cylinder)
+        
             self.cylinder_between(0,0,0, 0,self.loader.boxY,0,1)
+            cylinder = bpy.context.object; coll.objects.link(cylinder); bpy.context.collection.objects.unlink(cylinder)
+        
             self.cylinder_between(0,0,0, 0,0,self.loader.boxZ,1)
+            cylinder = bpy.context.object; coll.objects.link(cylinder); bpy.context.collection.objects.unlink(cylinder)
+        
             
             self.cylinder_between(self.loader.boxX,0,0, self.loader.boxX,self.loader.boxY,0,1)
+            cylinder = bpy.context.object; coll.objects.link(cylinder); bpy.context.collection.objects.unlink(cylinder)
+        
             self.cylinder_between(self.loader.boxX,0,0, self.loader.boxX,0,self.loader.boxZ,1)
+            cylinder = bpy.context.object; coll.objects.link(cylinder); bpy.context.collection.objects.unlink(cylinder)
+        
             
             self.cylinder_between(0,0,self.loader.boxZ, self.loader.boxX,0,self.loader.boxZ,1)
+            cylinder = bpy.context.object; coll.objects.link(cylinder); bpy.context.collection.objects.unlink(cylinder)
+        
             self.cylinder_between(0,0,self.loader.boxZ, 0,self.loader.boxY,self.loader.boxZ,1)
+            cylinder = bpy.context.object; coll.objects.link(cylinder); bpy.context.collection.objects.unlink(cylinder)
+        
             
             self.cylinder_between(0,self.loader.boxY,0, self.loader.boxX,self.loader.boxY,0,1)
+            cylinder = bpy.context.object; coll.objects.link(cylinder); bpy.context.collection.objects.unlink(cylinder)
+        
             self.cylinder_between(0,self.loader.boxY,0, 0,self.loader.boxY,self.loader.boxZ,1)
+            cylinder = bpy.context.object; coll.objects.link(cylinder); bpy.context.collection.objects.unlink(cylinder)
+        
             
             self.cylinder_between(self.loader.boxX,0,self.loader.boxZ, self.loader.boxX,self.loader.boxY,self.loader.boxZ,1)
+            cylinder = bpy.context.object; coll.objects.link(cylinder); bpy.context.collection.objects.unlink(cylinder)
+        
             self.cylinder_between(self.loader.boxX,self.loader.boxY,0, self.loader.boxX,self.loader.boxY,self.loader.boxZ,1)
+            cylinder = bpy.context.object; coll.objects.link(cylinder); bpy.context.collection.objects.unlink(cylinder)
+        
             self.cylinder_between(0,self.loader.boxY,self.loader.boxZ, self.loader.boxX,self.loader.boxY,self.loader.boxZ,1)
-            
+            cylinder = bpy.context.object; coll.objects.link(cylinder); bpy.context.collection.objects.unlink(cylinder)
+        
 #            coll = bpy.data.collections.new("SimulationBox")
 #            bpy.context.scene.collection.children.link(coll)
 #        
@@ -540,6 +569,15 @@ class TEST_OT_test_op(Operator):
                     bpy.data.objects.remove(obs.pop())
 
             bpy.data.collections.remove(coll)
+            
+        coll = bpy.data.collections.get("SimulationBox")
+        if coll:
+            if remove_collection_objects:
+                obs = [o for o in coll.objects]
+                while obs:
+                    bpy.data.objects.remove(obs.pop())
+
+            bpy.data.collections.remove(coll)
  
     @staticmethod
     def add_cube(context):
@@ -588,11 +626,25 @@ class TEST_OT_test_op(Operator):
         
         
         #.select.select_by_type(type=’MESH’)
-        for i, obj in enumerate(bpy.data.objects):
-            if obj.type == 'MESH':
-                mat = bpy.data.materials.new("mat_" + str(obj.name))
-                mat.diffuse_color = (1.0-i/len(bpy.data.objects), 0, i/len(bpy.data.objects), 1)
-                obj.data.materials.append(mat)
+        #for i, obj in enumerate(bpy.data.objects):
+        #    if obj.type == 'MESH':
+        #        mat = bpy.data.materials.new("mat_" + str(obj.name))
+        #        mat.diffuse_color = (1.0-i/len(bpy.data.objects), 0, i/len(bpy.data.objects), 1)
+        #0        obj.data.materials.append(mat)
+                
+        bpy.ops.object.select_all(action='DESELECT')
+        name = "PolymerSystem"
+        
+        coll = bpy.data.collections.get(name)
+
+        if coll:
+            for i, obj in enumerate(coll.objects):
+                if obj.type == 'MESH':
+                    mat = bpy.data.materials.new("mat_" + str(obj.name))
+                    mat.diffuse_color = (1.0-i/len(bpy.data.objects), 0, i/len(bpy.data.objects), 1)
+                    obj.data.materials.append(mat)
+
+        bpy.ops.object.select_all(action='DESELECT')
             
     @staticmethod
     def add_bonds(context, bonds, polymer):
@@ -603,6 +655,7 @@ class TEST_OT_test_op(Operator):
         
         bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius = 0.4, depth = 2.7,location = (0, 0, 0)) 
         cylinder = bpy.context.object
+        bpy.ops.object.shade_smooth()
         #coll.objects.link(cylinder)
         bpy.context.collection.objects.unlink(cylinder)
         
